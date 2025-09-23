@@ -1,6 +1,6 @@
 # 🌍 AI-Powered Disaster Management System
 
-### 🚀 A Scalable, AI-driven Solution for Real-Time Disaster Response & Resource Management
+### 🚀 A Scalable, AI-driven Solution for Real-Time Disaster Response & Ressource Management
 
 ![Banner](https://files.oaiusercontent.com/file-2DG2AecJUWPxnwLHKrxanU?se=2025-03-17T16%3A46%3A43Z&sp=r&sv=2024-08-04&sr=b&rscc=max-age%3D604800%2C%20immutable%2C%20private&rscd=attachment%3B%20filename%3D8b05450c-59b1-408e-ae74-0c578fe3ce0b.webp&sig=PHKMVDRSHRR9WrPZQO/0v9PCJql4cCJH6AYRTkezpm8%3D)
 
