@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
-import { X, Bell } from 'lucide-react';
+import { X, Bell, Bot, Loader2 } from 'lucide-react';
 import { useDisasterStore } from '../store/disaster';
+import { generateSafetyGuidance } from '../lib/gemini';
 import type { Database } from '../lib/database.types';
+import toast from 'react-hot-toast';
+import { motion, AnimatePresence } from 'framer-motion';
 
 type AlertInsert = Database['public']['Tables']['alerts']['Insert'];
 
@@ -33,10 +36,35 @@ export default function AlertModal({ onClose, disasterId }: AlertModalProps) {
   });
 
   const [error, setError] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleAutoGenerate = async () => {
+    if (!formData.type || !formData.title) {
+      setError("Please select an Alert Type and provide a Title first.");
+      return;
+    }
+    
+    setIsGenerating(true);
+    setError(null);
+    try {
+      const guidance = await generateSafetyGuidance({
+        type: formData.type,
+        title: formData.title
+      });
+      setFormData(prev => ({ ...prev, message: guidance }));
+    } catch (err) {
+      console.error(err);
+      setError("Failed to generate AI safety guidance. Please try again.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setIsSubmitting(true);
     
     try {
       await broadcastAlert({
@@ -44,16 +72,25 @@ export default function AlertModal({ onClose, disasterId }: AlertModalProps) {
         status: 'sent',
         sent_at: new Date().toISOString()
       });
+      toast.success('Alert broadcasted successfully!');
       onClose();
     } catch (error) {
       console.error('Failed to broadcast alert:', error);
       setError(error instanceof Error ? error.message : 'Failed to broadcast alert');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-lg">
+    <AnimatePresence>
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 20 }}
+          className="bg-white/90 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl p-6 w-full max-w-lg text-slate-900"
+        >
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center space-x-2">
             <Bell className="w-6 h-6 text-yellow-500" />
@@ -101,14 +138,25 @@ export default function AlertModal({ onClose, disasterId }: AlertModalProps) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Message</label>
+            <div className="flex justify-between items-end mb-1">
+              <label className="block text-sm font-medium text-gray-700">Message (Safety Guidance & Checklist)</label>
+              <button
+                type="button"
+                onClick={handleAutoGenerate}
+                disabled={isGenerating || !formData.title}
+                className="text-xs flex items-center space-x-1 bg-yellow-100 hover:bg-yellow-200 text-yellow-700 px-2 py-1 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Bot className="w-3 h-3" />}
+                <span>Auto-Generate AI Checklist</span>
+              </button>
+            </div>
             <textarea
               required
-              rows={4}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2"
+              rows={6}
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2"
               value={formData.message}
               onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-              placeholder="Detailed alert message"
+              placeholder="Detailed alert message or AI generated safety instructions..."
             />
           </div>
 
@@ -164,14 +212,16 @@ export default function AlertModal({ onClose, disasterId }: AlertModalProps) {
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 transition-colors"
+              disabled={isSubmitting}
+              className="px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 transition-colors disabled:opacity-50"
             >
-              Broadcast Alert
+              {isSubmitting ? 'Broadcasting...' : 'Broadcast Alert'}
             </button>
           </div>
         </form>
+        </motion.div>
       </div>
-    </div>
+    </AnimatePresence>
   );
 }
 

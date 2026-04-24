@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
-import { AlertTriangle, X } from 'lucide-react';
+import { AlertTriangle, X, Bot, Loader2 } from 'lucide-react';
 import { useDisasterStore } from '../store/disaster';
+import { analyzeSeverity } from '../lib/gemini';
 import type { Database } from '../lib/database.types';
+import toast from 'react-hot-toast';
+import { motion, AnimatePresence } from 'framer-motion';
 
 type ReportInsert = Database['public']['Tables']['reports']['Insert'];
 
@@ -26,10 +29,45 @@ export default function ReportIncident({ onClose }: ReportIncidentProps) {
   });
 
   const [error, setError] = useState<string | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleAutoAnalyze = async () => {
+    if (!formData.description || !formData.location_name) {
+      setError("Please fill in Description and Location Name first for AI analysis.");
+      return;
+    }
+    
+    setIsAnalyzing(true);
+    setError(null);
+    try {
+      const response = await analyzeSeverity({
+        type: formData.title || 'Unknown Incident',
+        description: formData.description,
+        location: formData.location_name
+      });
+      
+      // Attempt to parse severity if AI returns a number (e.g. "Severity level: 4")
+      const severityMatch = response.match(/severity.*?(\d)/i);
+      if (severityMatch && severityMatch[1]) {
+        const detectedSeverity = Math.min(5, Math.max(1, parseInt(severityMatch[1], 10)));
+        setFormData(prev => ({ ...prev, severity: detectedSeverity }));
+      }
+      
+      setAiSuggestions(response);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to analyze with AI. Please try again.");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setIsSubmitting(true);
     
     try {
       if (!formData.location?.coordinates[0] || !formData.location?.coordinates[1]) {
@@ -48,10 +86,13 @@ export default function ReportIncident({ onClose }: ReportIncidentProps) {
           ]
         }
       });
+      toast.success('Incident reported successfully!');
       onClose();
     } catch (error) {
       console.error('Failed to submit report:', error);
       setError(error instanceof Error ? error.message : 'Failed to submit report');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -69,8 +110,14 @@ export default function ReportIncident({ onClose }: ReportIncidentProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-lg">
+    <AnimatePresence>
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 20 }}
+          className="bg-white/90 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl p-6 w-full max-w-lg text-slate-900"
+        >
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center space-x-2">
             <AlertTriangle className="w-6 h-6 text-red-500" />
@@ -104,15 +151,32 @@ export default function ReportIncident({ onClose }: ReportIncidentProps) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Description</label>
+            <div className="flex justify-between items-end mb-1">
+              <label className="block text-sm font-medium text-gray-700">Description</label>
+              <button
+                type="button"
+                onClick={handleAutoAnalyze}
+                disabled={isAnalyzing || !formData.description}
+                className="text-xs flex items-center space-x-1 bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 py-1 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isAnalyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Bot className="w-3 h-3" />}
+                <span>Auto-Analyze with AI</span>
+              </button>
+            </div>
             <textarea
               required
               rows={3}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2"
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               placeholder="Detailed description of the situation"
             />
+            {aiSuggestions && (
+              <div className="mt-2 p-3 bg-blue-50/50 border border-blue-100 rounded-md text-xs text-gray-600 max-h-32 overflow-y-auto whitespace-pre-wrap">
+                <span className="font-semibold text-blue-800 block mb-1">AI Insights:</span>
+                {aiSuggestions}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -181,13 +245,15 @@ export default function ReportIncident({ onClose }: ReportIncidentProps) {
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+              disabled={isSubmitting}
+              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
             >
-              Submit Report
+              {isSubmitting ? 'Submitting...' : 'Submit Report'}
             </button>
           </div>
         </form>
+        </motion.div>
       </div>
-    </div>
+    </AnimatePresence>
   );
 }

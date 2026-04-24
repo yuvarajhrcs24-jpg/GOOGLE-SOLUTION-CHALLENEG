@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Activity, Settings, Bell, HelpCircle, User, LogOut, Shield, Mail, AlertTriangle, Bot } from 'lucide-react';
 import AIChat from './AIChat';
 
+import { useAuth } from '../lib/AuthContext';
+
 interface NotificationItem {
   id: string;
   type: 'alert' | 'update' | 'info';
@@ -40,6 +42,7 @@ export default function Navbar() {
   const [showHelp, setShowHelp] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showChat, setShowChat] = useState(false);
+  const { user, signOut } = useAuth();
 
   const renderNotificationsPanel = () => (
     <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-xl z-50">
@@ -128,11 +131,11 @@ export default function Navbar() {
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center">
           <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
-            <span className="text-white text-lg font-semibold">A</span>
+            <span className="text-white text-lg font-semibold">{user?.email?.charAt(0).toUpperCase() || 'U'}</span>
           </div>
           <div className="ml-3">
-            <p className="text-sm font-medium text-gray-900">Admin User</p>
-            <p className="text-xs text-gray-500">admin@emergency.gov</p>
+            <p className="text-sm font-medium text-gray-900 truncate w-36">{user?.email}</p>
+            <p className="text-xs text-gray-500">Citizen</p>
           </div>
         </div>
       </div>
@@ -147,7 +150,10 @@ export default function Navbar() {
           Preferences
         </button>
         <div className="border-t border-gray-200 mt-2 pt-2">
-          <button className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg flex items-center">
+          <button 
+            onClick={() => signOut()}
+            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg flex items-center"
+          >
             <LogOut className="w-4 h-4 mr-2" />
             Sign Out
           </button>

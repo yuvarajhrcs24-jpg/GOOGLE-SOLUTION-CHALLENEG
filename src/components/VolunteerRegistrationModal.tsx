@@ -1,26 +1,26 @@
 import React, { useState } from 'react';
-import { X, Box } from 'lucide-react';
+import { X, Users } from 'lucide-react';
 import { useDisasterStore } from '../store/disaster';
 import type { Database } from '../lib/database.types';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
-type ResourceInsert = Database['public']['Tables']['resources']['Insert'];
+type TeamInsert = Database['public']['Tables']['teams']['Insert'];
 
-interface ResourceModalProps {
+interface VolunteerRegistrationModalProps {
   onClose: () => void;
 }
 
-export default function ResourceModal({ onClose }: ResourceModalProps) {
-  const { createResource } = useDisasterStore();
-  const [formData, setFormData] = useState<Partial<ResourceInsert>>({
-    type: 'medical',
+export default function VolunteerRegistrationModal({ onClose }: VolunteerRegistrationModalProps) {
+  const { createTeam } = useDisasterStore();
+  const [formData, setFormData] = useState<Partial<TeamInsert>>({
     name: '',
-    description: '',
-    quantity: 0,
-    unit: 'units',
+    type: 'rescue',
+    capacity: 1,
+    current_members: 1,
     location_name: '',
     status: 'available',
+    specializations: [],
     location: {
       type: 'Point',
       coordinates: [0, 0]
@@ -40,12 +40,12 @@ export default function ResourceModal({ onClose }: ResourceModalProps) {
         throw new Error('Please provide valid coordinates');
       }
 
-      await createResource(formData as ResourceInsert);
-      toast.success('Resource added successfully!');
+      await createTeam(formData as TeamInsert);
+      toast.success('Volunteer registered successfully!');
       onClose();
     } catch (error) {
-      console.error('Failed to add resource:', error);
-      setError(error instanceof Error ? error.message : 'Failed to add resource');
+      console.error('Failed to register volunteer:', error);
+      setError(error instanceof Error ? error.message : 'Failed to register as volunteer');
     } finally {
       setIsSubmitting(false);
     }
@@ -75,8 +75,8 @@ export default function ResourceModal({ onClose }: ResourceModalProps) {
         >
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center space-x-2">
-            <Box className="w-6 h-6 text-blue-500" />
-            <h2 className="text-2xl font-bold">Add Resource</h2>
+            <Users className="w-6 h-6 text-blue-500" />
+            <h2 className="text-2xl font-bold">Register as Volunteer</h2>
           </div>
           <button 
             onClick={onClose} 
@@ -94,65 +94,53 @@ export default function ResourceModal({ onClose }: ResourceModalProps) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Resource Type</label>
-            <select
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2"
-              value={formData.type}
-              onChange={(e) => setFormData({ ...formData, type: e.target.value as ResourceInsert['type'] })}
-            >
-              <option value="medical">Medical Supplies</option>
-              <option value="food">Food</option>
-              <option value="water">Water</option>
-              <option value="shelter">Shelter</option>
-              <option value="rescue">Rescue Equipment</option>
-              <option value="transport">Transportation</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Name</label>
+            <label className="block text-sm font-medium text-gray-700">Team / Individual Name</label>
             <input
               type="text"
               required
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="e.g., Emergency Medical Kit"
+              placeholder="e.g., John Doe or Rapid Rescue Group"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Description</label>
-            <textarea
-              rows={3}
+            <label className="block text-sm font-medium text-gray-700">Role Type</label>
+            <select
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2"
-              value={formData.description || ''}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Detailed description of the resource"
-            />
+              value={formData.type}
+              onChange={(e) => setFormData({ ...formData, type: e.target.value as TeamInsert['type'] })}
+            >
+              <option value="medical">Medical / First Aid</option>
+              <option value="rescue">Search & Rescue</option>
+              <option value="firefighting">Firefighting</option>
+              <option value="police">Security / Police</option>
+              <option value="engineering">Engineering / Logistics</option>
+            </select>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Quantity</label>
+              <label className="block text-sm font-medium text-gray-700">Capacity (People)</label>
               <input
                 type="number"
                 required
-                min="0"
+                min="1"
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2"
-                value={formData.quantity}
-                onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })}
+                value={formData.capacity}
+                onChange={(e) => setFormData({ ...formData, capacity: Number(e.target.value) })}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Unit</label>
+              <label className="block text-sm font-medium text-gray-700">Current Members</label>
               <input
-                type="text"
+                type="number"
                 required
+                min="1"
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2"
-                value={formData.unit}
-                onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                placeholder="e.g., units, boxes, liters"
+                value={formData.current_members}
+                onChange={(e) => setFormData({ ...formData, current_members: Number(e.target.value) })}
               />
             </div>
           </div>
@@ -185,29 +173,15 @@ export default function ResourceModal({ onClose }: ResourceModalProps) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Location Name</label>
+            <label className="block text-sm font-medium text-gray-700">Location Base</label>
             <input
               type="text"
               required
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2"
               value={formData.location_name}
               onChange={(e) => setFormData({ ...formData, location_name: e.target.value })}
-              placeholder="e.g., Central Warehouse"
+              placeholder="e.g., Chennai Center"
             />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Status</label>
-            <select
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2"
-              value={formData.status}
-              onChange={(e) => setFormData({ ...formData, status: e.target.value as ResourceInsert['status'] })}
-            >
-              <option value="available">Available</option>
-              <option value="reserved">Reserved</option>
-              <option value="in-transit">In Transit</option>
-              <option value="deployed">Deployed</option>
-            </select>
           </div>
 
           <div className="flex justify-end space-x-3 mt-6">
@@ -221,9 +195,10 @@ export default function ResourceModal({ onClose }: ResourceModalProps) {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center disabled:opacity-50"
             >
-              {isSubmitting ? 'Adding...' : 'Add Resource'}
+              <Users className="w-4 h-4 mr-2" />
+              {isSubmitting ? 'Registering...' : 'Register'}
             </button>
           </div>
         </form>

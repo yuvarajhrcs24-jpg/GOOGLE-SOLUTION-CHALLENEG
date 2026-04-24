@@ -6,9 +6,11 @@ import Analytics from './Analytics';
 import ReportIncident from './ReportIncident';
 import ResourceModal from './ResourceModal';
 import AlertModal from './AlertModal';
+import VolunteerRegistrationModal from './VolunteerRegistrationModal';
 import AIChat from './AIChat';
 import { Globe } from './Globe';
 import Dock from './Dock';
+import EmergencyFeed from './EmergencyFeed';
 import { format } from 'date-fns';
 
 const StatCard = ({ icon: Icon, label, value, color }: { 
@@ -40,13 +42,15 @@ export default function Dashboard() {
     error,
     fetchInitialData,
     subscribeToUpdates,
-    unsubscribeFromUpdates
+    unsubscribeFromUpdates,
+    updateResource
   } = useDisasterStore();
 
   const [activeView, setActiveView] = useState('map');
   const [showReportModal, setShowReportModal] = useState(false);
   const [showResourceModal, setShowResourceModal] = useState(false);
   const [showAlertModal, setShowAlertModal] = useState(false);
+  const [showVolunteerModal, setShowVolunteerModal] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [selectedDisaster, setSelectedDisaster] = useState<string | null>(null);
 
@@ -160,6 +164,13 @@ export default function Dashboard() {
                     <Bell className="w-4 h-4" />
                     <span>Send Alert</span>
                   </button>
+                  <button 
+                    onClick={() => setShowVolunteerModal(true)}
+                    className="bg-green-500/20 hover:bg-green-500/30 text-white px-4 py-2 rounded-lg transition-all hover-lift flex items-center space-x-2"
+                  >
+                    <Users className="w-4 h-4" />
+                    <span>Volunteer</span>
+                  </button>
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -230,12 +241,19 @@ export default function Dashboard() {
                         <p className="text-sm text-gray-400">{resource.location_name}</p>
                         <p className="text-xs text-gray-500">Quantity: {resource.quantity} {resource.unit}</p>
                       </div>
-                      <span className={`px-3 py-1 rounded-full text-sm font-medium
-                        ${resource.status === 'available' ? 'bg-green-500/20 text-green-300' :
-                          resource.status === 'in-transit' ? 'bg-yellow-500/20 text-yellow-300' :
-                          'bg-blue-500/20 text-blue-300'}`}>
-                        {resource.status}
-                      </span>
+                      <select
+                        value={resource.status}
+                        onChange={(e) => updateResource(resource.id, { status: e.target.value as any })}
+                        className={`px-3 py-1 rounded-full text-sm font-medium appearance-none cursor-pointer outline-none transition-colors
+                          ${resource.status === 'available' ? 'bg-green-500/20 text-green-300 hover:bg-green-500/30' :
+                            resource.status === 'in-transit' ? 'bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/30' :
+                            'bg-blue-500/20 text-blue-300 hover:bg-blue-500/30'}`}
+                      >
+                        <option value="available" className="bg-gray-800 text-green-400">Available</option>
+                        <option value="in-transit" className="bg-gray-800 text-yellow-400">In Transit</option>
+                        <option value="deployed" className="bg-gray-800 text-blue-400">Deployed</option>
+                        <option value="reserved" className="bg-gray-800 text-purple-400">Reserved</option>
+                      </select>
                     </div>
                   </div>
                 ))}
@@ -261,6 +279,10 @@ export default function Dashboard() {
                   ))}
               </div>
             </div>
+            
+            <div className="h-96">
+              <EmergencyFeed />
+            </div>
           </div>
         </div>
       </div>
@@ -277,6 +299,10 @@ export default function Dashboard() {
 
       {showAlertModal && (
         <AlertModal onClose={() => setShowAlertModal(false)} disasterId={selectedDisaster} />
+      )}
+
+      {showVolunteerModal && (
+        <VolunteerRegistrationModal onClose={() => setShowVolunteerModal(false)} />
       )}
 
       {showChat && (

@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  body {
+    font-family: 'Inter', sans-serif;
+    @apply bg-slate-900 text-slate-100;
+  }
+}
+
 /* Animated Background */
 .bg-animate {
   background: linear-gradient(135deg, 

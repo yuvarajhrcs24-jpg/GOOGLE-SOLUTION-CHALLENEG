@@ -114,6 +114,7 @@ export default function DisasterMap({ onDisasterSelect }: DisasterMapProps) {
   const { disasters, teams, resources } = useDisasterStore();
   const [popupInfo, setPopupInfo] = useState<Disaster | null>(null);
   const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
+  const [safeZoneRoute, setSafeZoneRoute] = useState<any>(null);
   const mapRef = useRef<MapRef>(null);
   const [viewState, setViewState] = useState({
     longitude: 78.9629,
@@ -157,6 +158,48 @@ export default function DisasterMap({ onDisasterSelect }: DisasterMapProps) {
       }
     }
   }, [disasters]);
+
+  const handleFindSafeZone = (disaster: Disaster) => {
+    if (!disaster.location?.coordinates) return;
+    const [lng, lat] = disaster.location.coordinates;
+    
+    // Mock calculating nearest safe zone (just offset coordinates for demo)
+    const safeLng = lng + 0.5;
+    const safeLat = lat + 0.5;
+    
+    setSafeZoneRoute({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { type: 'evacuation-route' },
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [lng, lat],
+              [lng + 0.2, lat + 0.3],
+              [safeLng, safeLat]
+            ]
+          }
+        },
+        {
+          type: 'Feature',
+          properties: { type: 'safe-zone' },
+          geometry: {
+            type: 'Point',
+            coordinates: [safeLng, safeLat]
+          }
+        }
+      ]
+    });
+
+    // Fly to safe zone
+    mapRef.current?.flyTo({
+      center: [(lng + safeLng) / 2, (lat + safeLat) / 2],
+      zoom: 7,
+      duration: 2000
+    });
+  };
 
   const handleViewStateChange = (event: ViewStateChangeEvent) => {
     setViewState(event.viewState);
@@ -343,6 +386,33 @@ export default function DisasterMap({ onDisasterSelect }: DisasterMapProps) {
         />
       </Source>
 
+      {/* Render Safe Zone Route */}
+      {safeZoneRoute && (
+        <Source type="geojson" data={safeZoneRoute}>
+          <Layer
+            id="safe-zone-route"
+            type="line"
+            filter={['==', 'type', 'evacuation-route']}
+            paint={{
+              'line-color': '#3b82f6',
+              'line-width': 4,
+              'line-dasharray': [1, 1]
+            }}
+          />
+          <Layer
+            id="safe-zone-point"
+            type="circle"
+            filter={['==', 'type', 'safe-zone']}
+            paint={{
+              'circle-color': '#22c55e',
+              'circle-radius': 12,
+              'circle-stroke-width': 3,
+              'circle-stroke-color': '#ffffff'
+            }}
+          />
+        </Source>
+      )}
+
       {renderDisasterMarkers()}
       {renderResourceMarkers()}
       {renderTeamMarkers()}
@@ -375,6 +445,14 @@ export default function DisasterMap({ onDisasterSelect }: DisasterMapProps) {
                   Population affected: {popupInfo.affected_population.toLocaleString()}
                 </p>
               )}
+              
+              <button
+                onClick={() => handleFindSafeZone(popupInfo)}
+                className="mt-3 w-full bg-blue-100 hover:bg-blue-200 text-blue-700 py-1.5 rounded-md text-xs font-semibold transition-colors flex items-center justify-center space-x-1"
+              >
+                <Shield className="w-3 h-3" />
+                <span>Find Nearest Safe Zone</span>
+              </button>
             </div>
           </div>
         </Popup>

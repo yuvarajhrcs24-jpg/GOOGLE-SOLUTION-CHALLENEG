@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
 import type { Database } from '../lib/database.types';
+import { queueOfflineAction, getQueuedActions, removeQueuedAction } from '../lib/offlineSync';
 
 type Disaster = Database['public']['Tables']['disasters']['Row'];
 type Resource = Database['public']['Tables']['resources']['Row'];
@@ -22,11 +23,14 @@ interface DisasterStore {
   createDisaster: (disaster: Partial<Disaster>) => Promise<void>;
   updateDisaster: (id: string, updates: Partial<Disaster>) => Promise<void>;
   createReport: (report: Partial<Report>) => Promise<void>;
+  updateReport: (id: string, updates: Partial<Report>) => Promise<void>;
+  createTeam: (team: Partial<Team>) => Promise<void>;
   createResource: (resource: Partial<Resource>) => Promise<void>;
   updateResource: (id: string, updates: Partial<Resource>) => Promise<void>;
   deployTeam: (teamId: string, disasterId: string) => Promise<void>;
   allocateResources: (resourceId: string, disasterId: string, quantity: number) => Promise<void>;
   broadcastAlert: (alert: Partial<Alert>) => Promise<void>;
+  syncOfflineData: () => Promise<void>;
 }
 
 const initialDisasters: Disaster[] = [
@@ -292,6 +296,22 @@ export const useDisasterStore = create<DisasterStore>((set, get) => ({
               });
             }
           }
+        ),
+      supabase
+        .channel('reports')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'reports' },
+          payload => {
+            const { reports } = get();
+            if (payload.eventType === 'INSERT') {
+              set({ reports: [payload.new as Report, ...reports] });
+            } else if (payload.eventType === 'UPDATE') {
+              set({
+                reports: reports.map(r => 
+                  r.id === payload.new.id ? { ...r, ...payload.new } : r
+                )
+              });
+            }
+          }
         )
     ];
 
@@ -303,6 +323,7 @@ export const useDisasterStore = create<DisasterStore>((set, get) => ({
     supabase.channel('resources').unsubscribe();
     supabase.channel('teams').unsubscribe();
     supabase.channel('alerts').unsubscribe();
+    supabase.channel('reports').unsubscribe();
   },
 
   fetchInitialData: async () => {
@@ -381,22 +402,78 @@ export const useDisasterStore = create<DisasterStore>((set, get) => ({
 
   createReport: async (report) => {
     try {
+      const newReport = {
+        ...report,
+        status: 'pending',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      if (!navigator.onLine) {
+        // Optimistic update & queue offline
+        const tempReport = { ...newReport, id: `offline-${Date.now()}` } as Report;
+        await queueOfflineAction('reports', 'insert', newReport);
+        const { reports } = get();
+        set({ reports: [tempReport, ...reports] });
+        return;
+      }
+
       const { data, error } = await supabase
         .from('reports')
-        .insert([{
-          ...report,
-          status: 'pending',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }])
+        .insert([newReport])
         .select()
         .single();
 
       if (error) throw error;
       const { reports } = get();
-      set({ reports: [...reports, data] });
+      set({ reports: [data, ...reports] });
     } catch (error) {
       console.error('Error creating report:', error);
+      throw error;
+    }
+  },
+
+  updateReport: async (id, updates) => {
+    try {
+      const { data, error } = await supabase
+        .from('reports')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      const { reports } = get();
+      set({
+        reports: reports.map(r => r.id === id ? { ...r, ...data } : r)
+      });
+    } catch (error) {
+      console.error('Error updating report:', error);
+      throw error;
+    }
+  },
+
+  createTeam: async (team) => {
+    try {
+      const { data, error } = await supabase
+        .from('teams')
+        .insert([{
+          ...team,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          last_active: new Date().toISOString()
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+      const { teams } = get();
+      set({ teams: [...teams, data] });
+    } catch (error) {
+      console.error('Error creating team:', error);
       throw error;
     }
   },
@@ -514,6 +591,36 @@ export const useDisasterStore = create<DisasterStore>((set, get) => ({
     } catch (error) {
       console.error('Error broadcasting alert:', error);
       throw error;
+    }
+  },
+
+  syncOfflineData: async () => {
+    if (!navigator.onLine) return;
+    
+    try {
+      const actions = await getQueuedActions();
+      if (actions.length === 0) return;
+      
+      console.log(`Syncing ${actions.length} offline actions...`);
+      
+      for (const action of actions) {
+        if (action.action === 'insert') {
+          const { error } = await supabase.from(action.table).insert([action.payload]);
+          if (!error && action.id) {
+            await removeQueuedAction(action.id);
+          }
+        } else if (action.action === 'update' && action.payload.id) {
+          const { error } = await supabase.from(action.table).update(action.payload).eq('id', action.payload.id);
+          if (!error && action.id) {
+            await removeQueuedAction(action.id);
+          }
+        }
+      }
+      
+      // Refresh state after sync
+      await get().fetchInitialData();
+    } catch (err) {
+      console.error('Error syncing offline data:', err);
     }
   }
 }));

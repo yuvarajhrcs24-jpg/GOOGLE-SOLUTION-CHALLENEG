@@ -177,3 +177,28 @@ export async function generateSituationReport(data: {
   const response = await result.response;
   return response.text();
 }
+
+export async function generateSafetyGuidance(data: {
+  type: string;
+  title: string;
+  location?: string;
+}) {
+  const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
+  const prompt = `
+    Generate a concise, actionable safety checklist and guidance message for citizens regarding the following emergency alert:
+    Type of Alert: ${data.type}
+    Title: ${data.title}
+    ${data.location ? `Location: ${data.location}` : ''}
+
+    Please provide:
+    1. A short, urgent introductory sentence.
+    2. 3-5 immediate action steps (bullet points).
+    3. What NOT to do (1-2 critical warnings).
+    Make it easy to read on mobile devices. Do not include markdown formatting like asterisks or bold tags, just plain text with dashes for bullet points.
+  `;
+
+  const result = await model.generateContent(prompt);
+  const response = await result.response;
+  return response.text();
+}
